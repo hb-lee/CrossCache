@@ -1,0 +1,15 @@
+[submodule "infrastructure"]
+	path = infrastructure
+	url = https://github.com/hb-lee/infrastructure.git
+[submodule "thirdparty/jsoncpp"]
+	path = thirdparty/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "thirdparty/zlog"]
+	path = thirdparty/zlog
+	url = https://github.com/HardySimpson/zlog.git
+[submodule "thirdparty/libzmq"]
+	path = thirdparty/libzmq
+	url = https://github.com/zeromq/libzmq.git
+[submodule "thirdparty/securec"]
+	path = thirdparty/securec
+	url = https://github.com/chriszt/securec.git
