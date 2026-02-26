@@ -15,6 +15,7 @@
 #include "inner.h"
 #include "cache.h"
 #include "sysdef.h"
+#include "conf.h"
 
 #define MAX_NODE_NUM 8
 #define INVALID_NODE_ID MAX_NODE_NUM
@@ -29,16 +30,10 @@ const char *cop_to_str[] = {
     [CACHE_MAX] = "UNKOWN",
 };
 
-struct cache_config {
-    uint32_t chunk_size;
-    uint32_t port;
-    uint64_t pool_size;
-    const char *local_path;
-};
-
 struct cache_server {
-    struct cache_config config;
     struct worker_context wcontext[MAX_NODE_NUM];
+    uint32_t port;
+    uint32_t chunk_size;
 
     /* for zeromq */
     void *context;
@@ -141,7 +136,7 @@ static int do_lookup(uint8_t *keys, uint32_t key_num, uint32_t key_len,
 
     hitted = cache_lookup(&wctx, keys, key_num, key_len);
     log_debug("[do_lookup] model[%s,%u] knum:%u,klen:%u,hitted pos:%d", name, world_size, key_num, key_len, hitted);
-    return (hitted / key_len) * g_server.config.chunk_size;
+    return (hitted / key_len) * g_server.chunk_size;
 }
 
 static int do_load(int nid, uint8_t *keys, uint32_t key_len, uint32_t key_num,
@@ -164,7 +159,7 @@ static int do_load(int nid, uint8_t *keys, uint32_t key_len, uint32_t key_num,
     }
     printf("]\n");
 #endif
-    sys_assert((key_num * g_server.config.chunk_size == block_num * wctx->block_size));
+    sys_assert((key_num * g_server.chunk_size == block_num * wctx->block_size));
     return cache_load(wctx, keys, key_len, block_ids, block_num);
 }
 
@@ -188,7 +183,7 @@ static int do_store(int nid, uint8_t *keys, uint32_t key_len, uint32_t key_num,
     }
     printf("]\n");
 #endif
-    sys_assert((key_num * g_server.config.chunk_size == block_num * wctx->block_size));
+    sys_assert((key_num * g_server.chunk_size == block_num * wctx->block_size));
     return cache_store(wctx, keys, key_len, block_ids, block_num);
 }
 
@@ -391,29 +386,30 @@ static void handle_request(struct msg_header *header, void *id, int id_len)
 
 int init_server_resource()
 {
+    g_server.port = config_get_u32(BASIC_PORT);
+    g_server.chunk_size = config_get_u32(BASIC_CHUNKSZ);
     for (int i = 0; i < MAX_NODE_NUM; i++)
         g_server.wcontext[i].node_id = INVALID_NODE_ID;
 
     spinlock_init(&g_server.rsp_lock);
-    g_server.common_thp = threadpool_create("CommThp", 2);
+    g_server.common_thp = threadpool_create("CommThp", config_get_u32(REQ_CWORKER));
     if (!g_server.common_thp) {
         log_error("create common thp failed");
         return -1;
     }
 
-    g_server.load_thp = threadpool_create("LoadThp", 4);
+    g_server.load_thp = threadpool_create("LoadThp", config_get_u32(REQ_LWORKER));
     if (!g_server.load_thp) {
         log_error("create load thp failed");
         return -1;
     }
 
-    g_server.store_thp = threadpool_create("StoreThp", 4);
+    g_server.store_thp = threadpool_create("StoreThp", config_get_u32(REQ_SWORKER));
     if (!g_server.store_thp) {
         log_error("create store thp failed");
         return -1;
     }
-    return cache_init(g_server.config.chunk_size, g_server.config.pool_size,
-            g_server.config.local_path);
+    return cache_init();
 }
 
 void exit_server_resource()
@@ -425,75 +421,31 @@ void exit_server_resource()
     spinlock_destroy(&g_server.rsp_lock);
 }
 
-void cache_init_configure(void)
+int main(int argc, char *argv[])
 {
-    g_server.config.port = 5555;
-    g_server.config.chunk_size = 256;
-    g_server.config.pool_size = 4 * 1024UL * 1024UL * 1024UL;
-    g_server.config.local_path = "/var/log/crosscache";
-}
+    const char *cfg = NULL;
+    int opt, ret;
 
-static struct option long_options[] =
-{
-    {"help", no_argument, NULL, 'h'},
-    {"port", required_argument, 0, 'P'},
-    {"cachedir", required_argument, 0, 1},
-    {"chunksize", required_argument, 0, 2},
-    {0, 0, 0, 0},
-};
-
-static void usage(int argc, char **argv)
-{
-    printf("Usage: %s [OPTIONS]\n", argv[0]);
-    printf("Options:\n");
-    printf("  -h, --help                   Print this help message\n");
-    printf("  -P, --port <port>            Specify the listening port (default: 5555)\n");
-    printf("  --chunksize <size>           Specify the chunk size (default: 256)\n");
-    printf("  --cachedir <dir>             Specify the local dir for k/v files (default: /var/log/crosscache)\n");
-}
-
-static int cache_parse_options_cfg(int argc, char **argv)
-{
-    int opt;
-    char *endptr;
-
-    while ((opt = getopt_long(argc, argv, "hP:",
-                long_options, NULL)) != - 1) {
+    while ((opt = getopt(argc, argv, "hc:")) != -1) {
         switch (opt) {
         case 'h':
-            usage(argc, argv);
-            exit(0);
-        case 'P':
-            g_server.config.port = strtoul(optarg, &endptr, 0);
-            if (*endptr != '\0') {
-                fprintf(stderr, "invalid port: %s\n", optarg);
-                return -EINVAL;
-            }
-            break;
-        case 1:
-            g_server.config.local_path = optarg;
-            break;
-        case 2:
-            g_server.config.chunk_size = strtoul(optarg, &endptr, 0);
-            if (*endptr != '\0') {
-                fprintf(stderr, "Invalid chunksize: %s\n", optarg);
-                return -EINVAL;
-            }
+            fprintf(stdout, "Usage: %s [-h] [-c <config>]\n", argv[0]);
+            return 0;
+        case 'c':
+            cfg = optarg;
             break;
         default:
+            fprintf(stderr, "Usage: %s [-h] [-c <config>]\n", argv[0]);
             return -EINVAL;
         }
     }
-
-    return 0;
-}
-
-int main(int argc, char *argv[])
-{
-    cache_init_configure();
-    int ret = cache_parse_options_cfg(argc, argv);
-    if (ret != 0) {
-        fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
+    if (!cfg) {
+        fprintf(stderr, "No config file specified.\nUsage: %s [-h] [-c <config>]\n", argv[0]);
+        return -1;
+    }
+    ret = config_init(cfg);
+    if (ret) {
+        log_error("Failed to init config");
         return ret;
     }
     ret = init_server_resource();
@@ -504,7 +456,7 @@ int main(int argc, char *argv[])
     g_server.socket = zmq_socket(g_server.context, ZMQ_ROUTER);
     spinlock_init(&g_server.rsp_lock);
     char addr[20];
-    sprintf(addr, "tcp://*:%u", g_server.config.port);
+    sprintf(addr, "tcp://*:%u", g_server.port);
     ret = zmq_bind(g_server.socket, addr);
     if (ret) {
         log_error("Failed to bind socket:%s", zmq_strerror(errno));
@@ -512,7 +464,7 @@ int main(int argc, char *argv[])
     }
 
     log_info("CrossCache listening on tcp://*:%u, chunk_size:%u, cachedir:%s",
-              g_server.config.port, g_server.config.chunk_size, g_server.config.local_path);
+              g_server.port, g_server.chunk_size, config_get_string(BASIC_CACHEDIR));
     int timeout = 5000;
     zmq_setsockopt(g_server.socket, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
     zmq_pollitem_t items[] = {{g_server.socket, 0, ZMQ_POLLIN, 0}};

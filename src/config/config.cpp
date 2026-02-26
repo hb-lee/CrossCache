@@ -38,12 +38,14 @@ static int parseBasic(Json::Value &basic, map_t &mem)
         log_error("Basic/Port must be 'Uint32'");
         return -1;
     }
-
     if (!basic["ChunkSize"].isUInt()) {
         log_error("Basic/ChunkSize must be 'Uint32'");
         return -1;
     }
-
+    if (!basic["PoolSize"].isUInt()) {
+        log_error("Basic/PoolSize must be 'Uint32'");
+        return -1;
+    }
     if (!basic["CacheDir"].isString()) {
         log_error("Basic/CacheDir must be 'String'");
         return -1;
@@ -53,6 +55,8 @@ static int parseBasic(Json::Value &basic, map_t &mem)
     mem.insert(std::pair<std::string, std::string>(BASIC_PORT, std::to_string(port)));
     uint32_t chunksize = basic["ChunkSize"].asUInt();
     mem.insert(std::pair<std::string, std::string>(BASIC_CHUNKSZ, std::to_string(chunksize)));
+    uint32_t poolsize = basic["PoolSize"].asUInt();
+    mem.insert(std::pair<std::string, std::string>(BASIC_POOLSZ, std::to_string(poolsize)));
     std::string cachedir = basic["CacheDir"].asString();
     mem.insert(std::pair<std::string, std::string>(BASIC_CACHEDIR, cachedir));
     return 0;
@@ -82,6 +86,30 @@ static int parseRequest(Json::Value &req, map_t &mem)
     return 0;
 }
 
+static int parseCache(Json::Value &cache, map_t &mem)
+{
+    if (!cache["IOWorker"].isUInt()) {
+        log_error("Cache/IOWorker must be 'Uint32'");
+        return -1;
+    }
+    if (!cache["CopyWorker"].isUInt()) {
+        log_error("Cache/CopyWorker must be 'Uint32'");
+        return -1;
+    }
+    if (!cache["LookupMapScale"].isUInt()) {
+        log_error("Cache/LookupMapScale must be 'Uint32'");
+        return -1;
+    }
+
+    uint32_t ioworker = cache["IOWorker"].asUInt();
+    mem.insert(std::pair<std::string, std::string>(CACHE_IOWORKER, std::to_string(ioworker)));
+    uint32_t cyworker = cache["CopyWorker"].asUInt();
+    mem.insert(std::pair<std::string, std::string>(CACHE_CYWORKER, std::to_string(cyworker)));
+    uint32_t lkupscale = cache["LookupMapScale"].asUInt();
+    mem.insert(std::pair<std::string, std::string>(CACHE_LKUPSCALE, std::to_string(lkupscale)));
+    return 0;
+}
+
 class Config
 {
     private:
@@ -98,11 +126,11 @@ class Config
 
             if (!fileToJson(path, root)) 
                 return -1;
-
             if (parseBasic(root["Basic"], memDB) != 0)
                 return -1;
-
-                return parseRequest(root["Request"], memDB);
+            if (parseRequest(root["Request"], memDB) != 0)
+                return -1;
+            return parseCache(root["Cache"], memDB);
         }
 
         static uint32_t GetU32(const char *key)

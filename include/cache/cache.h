@@ -22,7 +22,7 @@ int cache_store(struct worker_context *wctx, uint8_t *keys,
 int cache_load(struct worker_context *wctx, uint8_t *keys,
                uint32_t key_len, uint64_t *bids, uint32_t bnum);
 
-int cache_init(uint32_t chunk_size, uint64_t pool_size, const char *root_dir);
+int cache_init();
 
 void cache_exit();
 

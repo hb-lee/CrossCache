@@ -1,5 +1,11 @@
 # CrossCache
 
+### About CrossCache
+
+This project references LMCache and implements a flexible KV Cache management system to accelerate TTFT in large model inference. The project decouples tensor semantics in AI from memory semantics in storage, and implements KV Cache as a service on NPU. Based on this project, users can focus only on storage-level management, such as building multi-level shared caches, without needing to pay attention to the handling of tensor semantics in AI.
+
+NOTE: This is a WIP project, and the end-to-end process has already been run on the NPU. Everyone is welcome to contribute.
+
 ### Dependency Matrix
 
 - vllm: v0.11.2
@@ -13,7 +19,7 @@
 ##### Build the CrossCache server
 
 ```
-git clone xxx --recurse-submodules
+git clone ${repo} --recurse-submodules
 cd build;
 ```
 
@@ -50,7 +56,30 @@ python3 setup.py build_ext --inplace
 Now, we provide one demo call fake_client.py.
 
 - run server
-bin/crosscache
+bin/crosscache -c config.cfg
+
+> the config.cfg is the configuration file for crosscache. And the content could be like:
+
+``` cfg
+{
+	"Basic": {
+		"Port": 5555,
+		"ChunkSize": 256,
+		"PoolSize": 4,
+		"CacheDir": "/var/log/crosscache"
+	},
+	"Request": {
+		"LoadWorker": 4,
+		"StoreWorker": 4,
+		"CommWorker": 2
+	},
+	"Cache": {
+		"IOWorker": 4,
+		"CopyWorker": 4,
+		"LookupMapScale": 4096
+	}
+}
+```
 
 - run the client to test
 python3 fake_client.py
@@ -86,5 +115,4 @@ cp python/crosscache_connector.py ${VLLM_SRC}/vllm/distributed/kv_transfer/kv_co
 export VLLM_LOGGING_LEVEL=DEBUG
 vllm serve /workspace/models/qwen2.5_7B_Instruct --no-enable-prefix-caching --gpu-memory-utilization 0.8 --kv-transfer-config '{"kv_connector":"CrossCacheConnector", "kv_role":"kv_both", "kv_connector_extra_config": {"cache.server.host": "tcp://127.0.0.1", "cache.server.port": 5555}}'
 vllm serve /workspace/models/qwen2.5_7B_Instruct --no-enable-prefix-caching --gpu-memory-utilization 0.8 --kv-transfer-config '{"kv_connector":"CrossCacheConnector", "kv_role":"kv_both", "kv_connector_extra_config": {"cache.server.host": "tcp://127.0.0.1", "cache.server.port": 5555}}' --host 0.0.0.0 --port 9000
-
 ```

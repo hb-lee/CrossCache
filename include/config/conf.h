@@ -13,6 +13,7 @@ extern "C" {
 
 #define BASIC_PORT "Basic/Port"
 #define BASIC_CHUNKSZ "Basic/ChunkSize"
+#define BASIC_POOLSZ "Basic/PoolSize"
 #define BASIC_CACHEDIR "Basic/CacheDir"
 
 #define REQ_LWORKER "Request/LoadWorker"

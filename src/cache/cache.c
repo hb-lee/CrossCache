@@ -13,6 +13,7 @@
 #include "atomic.h"
 #include "log.h"
 #include "sysdef.h"
+#include "conf.h"
 
 #include <errno.h>
 #include <string.h>
@@ -23,7 +24,6 @@
 #include <time.h>
 
 #define PATH_LEN 128
-#define LKUP_MAP_SCALES 4096
 
 #define KV_H_TO_D false
 #define KV_D_TO_H true
@@ -640,7 +640,7 @@ int cache_register(struct worker_context *wctx)
     entry->key.tp_size = wctx->world_size;
     entry->key.tp_id = wctx->rank_id;
     /* create lookup hashmap for each sharing domain */
-    ret = hashmap_create(LKUP_MAP_SCALES, key_cmp, key_hash, &entry->lkup_map);
+    ret = hashmap_create(config_get_u32(CACHE_LKUPSCALE), key_cmp, key_hash, &entry->lkup_map);
     if (ret)
         goto free_tag;
     /* alloc pinned address for each sharing domain */
@@ -760,12 +760,12 @@ int cache_load(struct worker_context *wctx, uint8_t *keys,
     return cache_op(wctx, keys, key_len, bids, bnum, OP_LOAD);
 }
 
-int cache_init(uint32_t chunk_size, uint64_t pool_size, const char *root_dir)
+int cache_init()
 {
     int ret;
 
-    g_cache_mgr.chunk_size = chunk_size;
-    g_cache_mgr.pool_size = pool_size;
+    g_cache_mgr.chunk_size = config_get_u32(BASIC_CHUNKSZ);
+    g_cache_mgr.pool_size = config_get_u32(BASIC_POOLSZ) * 1024UL * 1024UL * 1024UL;    // pool size in Gb
 #ifdef _NPU
     g_cache_mgr.adaptor = npu_adaptor_create();
 #elif _NPUSDK
@@ -777,15 +777,15 @@ int cache_init(uint32_t chunk_size, uint64_t pool_size, const char *root_dir)
     ret = hashmap_create(8, rt_cmp, rt_hash, &g_cache_mgr.model_rt_map);
     sys_assert(ret == 0);
 
-    g_cache_mgr.io = threadpool_create("CaIO", 4);
-    g_cache_mgr.copy = threadpool_create("CaCopy", 4);
+    g_cache_mgr.io = threadpool_create("CaIO", config_get_u32(CACHE_IOWORKER));
+    g_cache_mgr.copy = threadpool_create("CaCopy", config_get_u32(CACHE_CYWORKER));
 
-    g_cache_mgr.local_dir = strdup(root_dir);
-    if (0 != access(root_dir, 0)) {
-        ret = mkdir(root_dir, S_IRWXU | S_IRGRP | S_IXGRP);
+    g_cache_mgr.local_dir = strdup(config_get_string(BASIC_CACHEDIR));
+    if (0 != access(g_cache_mgr.local_dir, 0)) {
+        ret = mkdir(g_cache_mgr.local_dir, S_IRWXU | S_IRGRP | S_IXGRP);
         sys_assert(ret == 0);
     }
-    g_cache_mgr.dirfd = open(root_dir, O_RDONLY|O_DIRECTORY);
+    g_cache_mgr.dirfd = open(g_cache_mgr.local_dir, O_RDONLY|O_DIRECTORY);
     sys_assert(g_cache_mgr.dirfd > 0);
     return 0;
 }

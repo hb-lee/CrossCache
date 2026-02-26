@@ -10,7 +10,7 @@ include(${ASCENDC_CMAKE_DIR}/ascendc.cmake)
 
 function(detect_cann_version)
     set(CANN_VERSION "0.0")
-    
+
     # Extract the version number from version.cfg (format: [8.3.0.1.200:8.3.RC1])
     set(VERSION_CFG "${ASCEND_CANN_PACKAGE_PATH}/version.cfg")
     if(EXISTS "${VERSION_CFG}")
@@ -20,7 +20,7 @@ function(detect_cann_version)
             set(CANN_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
         endif()
     endif()
-    
+
     # Parsing cann version from the installation path
     if(CANN_VERSION STREQUAL "0.0")
         get_filename_component(REAL_PATH "${ASCEND_CANN_PACKAGE_PATH}" REALPATH)
@@ -32,10 +32,10 @@ function(detect_cann_version)
     else()
         set(CANN_IS_83 FALSE)
     endif()
-    
+
     set(CANN_VERSION "${CANN_VERSION}" PARENT_SCOPE)
     set(CANN_IS_83 "${CANN_IS_83}" PARENT_SCOPE)
-    
+
     message(STATUS "CANN Version: ${CANN_VERSION}")
 endfunction()
 
@@ -401,7 +401,7 @@ function(ascendc_library_with_def target_name target_type)
 
     if(NOT ASCEND_KERNEL_LAUNCH_ONLY)
         add_dependencies(${target_name} ${target_name}_host)
-        
+
         add_custom_command(TARGET ${target_name}
             POST_BUILD
             COMMAND rm -f $<TARGET_FILE:${target_name}>

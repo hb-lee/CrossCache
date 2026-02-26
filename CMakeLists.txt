@@ -91,6 +91,7 @@ endif()
 set(INFRA_DIR		${PROJECT_SOURCE_DIR}/infrastructure)
 set(SECUREC_DIR	${THIRD_PARTY}/securec)
 set(ZLOG_DIR	${THIRD_PARTY}/zlog)
+set(JSONCPP_DIR	${THIRD_PARTY}/jsoncpp)
 
 #***********************************************************
 #***********************************************************
