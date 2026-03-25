@@ -83,7 +83,7 @@ void MemAdaptor::UnWrapperPtr(void *daddr)
 
 void* MemAdaptor::OpenIPCKeys(uint8_t nid, uint16_t per_len, uint16_t num, void *data)
 {
-    char shm[10];
+    char shm[15];
     int i, fd;
     void *va;
     uint64_t *ptrs, *ori_ptrs;
