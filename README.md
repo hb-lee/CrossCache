@@ -4,7 +4,9 @@
 
 This project references LMCache and implements a flexible KV Cache management system to accelerate TTFT in large model inference. The project decouples tensor semantics in AI from memory semantics in storage, and implements KV Cache as a service on NPU. Based on this project, users can focus only on storage-level management, such as building multi-level shared caches, without needing to pay attention to the handling of tensor semantics in AI.
 
-NOTE: This is a WIP project, and the end-to-end process has already been run on the NPU. Everyone is welcome to contribute.
+NOTE: This is a WIP project, and the end-to-end process has already been run on the NPU. Everyone is welcome to contribute. We have done some basic verification, and the below is our performance results:
+
+![](assets/crosscache-perf.png)
 
 ### Dependency Matrix
 
@@ -56,6 +58,7 @@ python3 setup.py build_ext --inplace
 Now, we provide one demo call fake_client.py.
 
 - run server
+export ASCEND__RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 bin/crosscache -c config.cfg
 
 > the config.cfg is the configuration file for crosscache. And the content could be like:

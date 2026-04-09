@@ -22,10 +22,6 @@ public:
     NPUSDKAdaptor()
     {
         log_debug("NPUSDKAdaptor init");
-        if (setenv("ASCEND_RT_VISIBLE_DEVICES", "0,1,2,3,4,5,6,7", 1) != 0) {
-            log_error("set ASCEND_RT_VISIBLE_DEVICES failed");
-            throw std::bad_alloc();
-        }
         aclError err = aclInit(NULL);
         if (err != ACL_SUCCESS)
             throw std::bad_alloc();

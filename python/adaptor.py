@@ -85,6 +85,8 @@ class SchedulerAdapter(object):
         # [2183 2129 3099 238 | 3289 3894 84809 3902] --> [2183 3289]
         s = striding_block_hashes(block_hashes, self.blocks_in_chunk)
         keys = [block_hash for block_hash in s]
+        if len(keys) == 0:
+            return
         future = self.mq_client.submit_request(
             RequestType.LOOKUP,
             to_lookup_payloads(self.instance_id, keys, self.world_size, self.model_name),
@@ -92,9 +94,8 @@ class SchedulerAdapter(object):
         self.lookup_futures[request_id] = future
 
     def check_lookup_result(self, request_id: str) -> int | None:
-        assert request_id in self.lookup_futures, (
-            f"Lookup request for request_id={request_id} has not been submitted"
-        )
+        if request_id not in self.lookup_futures:
+            return 0
 
         future = self.lookup_futures[request_id]
         if not future.query():

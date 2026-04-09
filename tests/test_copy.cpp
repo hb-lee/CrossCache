@@ -132,7 +132,7 @@ static void usage(int argc, char **argv)
         "\t--kvbyte|-s=X    specify the dtype which occupied. \n"
         "\t--device|-d=X    specify the device id. \n"
         "\t--layer|-l=X     specify the number of model layer. \n",
-        argv[0])
+        argv[0]);
 }
 
 static int parse_options(int argc, char **argv)

@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MAX_NODE_NUM 8
+#define INVALID_NODE_ID MAX_NODE_NUM
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -19,24 +19,47 @@
 #include <cstdio>
 #include <new>
 
+#define MAX_STREAM 4
+
 class NPUAdaptor : public Adaptor
 {
+private:
+    aclrtStream streams[MAX_NODE_NUM][MAX_STREAM];
+    uint64_t curr_indice[MAX_NODE_NUM];
+
 public:
     NPUAdaptor()
     {
         log_debug("NPUAdaptor init");
-        if (setenv("ASCEND_RT_VISIBLE_DEVICES", "0,1,2,3,4,5,6,7", 1) != 0) {
-            log_error("set ASCEND_RT_VISIBLE_DEVICES failed");
-            throw std::bad_alloc();
-        }
         aclError err = aclInit(NULL);
         if (err != ACL_SUCCESS)
             throw std::bad_alloc();
+
+        for (int i = 0; i < MAX_NODE_NUM; i++) {
+            err = aclrtSetDevice(i);
+            if (err != ACL_SUCCESS) {
+                log_error("device(%u) aclrt set device failed, err:%d", i, err);
+                throw std::bad_alloc();
+            }
+            curr_indice[i] = 0;
+            for (int j = 0; j < MAX_STREAM; j++) {
+                err = aclrtCreateStream(&streams[i][j]);
+                if (err != ACL_SUCCESS) {
+                    log_error("deivce(%u) aclrt create stream failed, err:%d", i, err);
+                    throw std::bad_alloc();
+                }
+            }
+        }
     }
 
     ~NPUAdaptor()
     {
         log_debug("NPUAdaptor exit");
+        for (int i = 0; i < MAX_NODE_NUM; i++) {
+            for (int j = 0; j < MAX_STREAM; j++) {
+                aclrtDestroyStream(streams[i][j]);
+            }
+        }
         aclFinalize();
     }
 
@@ -53,7 +76,6 @@ public:
 void* NPUAdaptor::AllocPinnedPtr(uint8_t nid, uint64_t size, unsigned int flags, void **daddr)
 {
     void *addr, *devptr;
-    char *buf;
     aclError err;
 
     if (size % 4096) {
@@ -71,10 +93,7 @@ void* NPUAdaptor::AllocPinnedPtr(uint8_t nid, uint64_t size, unsigned int flags,
         log_error("device(%u) alloc pin addr failed, size:%lu, errno:%d", nid, size, errno);
         return NULL;
     }
-    buf = (char *)addr;
-    for (uint64_t i = 0; i < size; i += 4096) {
-        buf[i] = '0';
-    }
+    memset(addr, 0, size);
     if (mlock(addr, size) != 0) {
         log_error("device(%u) lock memory failed, size:%lu, errno:%d", nid, size, errno);
         munmap(addr, size);
@@ -206,12 +225,7 @@ int NPUAdaptor::TransferKVCache(struct transfer_params *params)
         log_error("device(%u) aclrt set device failed, err:%d", params->devid, err);
         return -1;
     }
-    aclrtStream stream;
-    err = aclrtCreateStream(&stream);
-    if (err != ACL_SUCCESS) {
-        log_error("device(%u) aclrt create stream failed, err:%d", params->devid, err);
-        return -1;
-    }
+    aclrtStream stream = streams[params->devid][curr_indice[params->devid]++ % MAX_STREAM];
 
     const char *socName = aclrtGetSocName();
     auto ascendcPlatform = platform_ascendc::PlatformAscendCManager::GetInstance(socName);
@@ -224,7 +238,6 @@ int NPUAdaptor::TransferKVCache(struct transfer_params *params)
     int64_t baseBuffSize = numBuffsOnDev * hidden_dims * params->caches_element_size;
     if ((int64_t)ubSize < baseBuffSize) {
         log_error("(device:%u) ubSize is too small for single token, ubSize:%lu, bs:%ld", params->devid, ubSize, baseBuffSize);
-        aclrtDestroyStream(stream);
         return -1;
     }
     int32_t maxTokensPerLoop = (ubSize / baseBuffSize) - 1;
@@ -232,7 +245,6 @@ int NPUAdaptor::TransferKVCache(struct transfer_params *params)
     int64_t totalPerLoopBuffer = static_cast<int64_t>(maxTokensPerLoop) * baseBuffSize;
     if ((int64_t)ubSize < totalPerLoopBuffer) {
         log_error("(device:%u) per Loop buffer size:%ld exceed ubsize:%lu", params->devid, totalPerLoopBuffer,ubSize);
-        aclrtDestroyStream(stream);
         return -1;
     }
 
@@ -246,11 +258,9 @@ int NPUAdaptor::TransferKVCache(struct transfer_params *params)
     err = aclrtSynchronizeStream(stream);
     if (err != ACL_SUCCESS) {
         log_error("device(%u) aclrt sync stream failed, err:%d", params->devid, err);
-        aclrtDestroyStream(stream);
         return -1;
     }
     log_debug("(device:%u) transfer done, direction:%s", params->devid, direction ? "D->H" : "H->D");
-    aclrtDestroyStream(stream);
     return 0;
 }
 

@@ -14,11 +14,9 @@
 #include "protocol.h"
 #include "inner.h"
 #include "cache.h"
+#include "device.h"
 #include "sysdef.h"
 #include "conf.h"
-
-#define MAX_NODE_NUM 8
-#define INVALID_NODE_ID MAX_NODE_NUM
 
 const char *cop_to_str[] = {
     [CACHE_REGISTER] = "REGISTER",
